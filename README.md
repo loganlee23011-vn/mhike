@@ -1,97 +1,78 @@
 # M-Hike 🥾
 
-A hiker management app — record planned hikes, log observations during a hike, and search your records. Data lives in the cloud so hikes are shared with the community.
+A hiker management app — record planned hikes, log observations during a hike, and search your records. Data lives in the cloud (Firebase Firestore) so hikes are shared with the community.
 
 Coursework for **COMP1786 — Mobile Application Design and Development** (University of Greenwich, 2025/26).
 
-**Tech:** React Native (Expo) · Firebase Firestore · Firebase Anonymous Auth · React Navigation · OpenWeatherMap API
+**Tech:** React Native (Expo SDK 57) · Firebase Firestore · Firebase Anonymous Auth · React Navigation · OpenWeatherMap API · Leaflet (via WebView, for the Map tab)
 
-> This repo is a monorepo. `react-native-app/` implements coursework features e–g. `android-app/` (native Java, features a–d) is added in phase 2.
+> This repo currently contains the React Native app only (coursework features e–g, which also cover the full functional scope a–d as the reference implementation). The native Android/Java port (features a–d) is a later phase and is not in this repo yet.
 
 ---
 
 ## Features
 
-- ✏️ **Add hike** — required fields (name, location, date, parking, length, difficulty) + optional (description, estimated duration, terrain type), inline validation, confirmation screen before save *(feature e)*
-- 📋 **Manage hikes** — list, view details, edit, delete one, reset all (with confirm dialog) *(feature f)*
-- 🔭 **Observations** — add time-stamped observations to any hike, edit/delete, default time = now
-- 🔎 **Search** — by name, plus advanced filters (location, length, date)
-- 📍 **Location + weather** *(feature g)* — auto-capture GPS coordinates on each observation and attach current weather from OpenWeatherMap
-- 📶 **Offline-first** — works without a network (Firestore local cache), syncs automatically when back online
+| # | Feature | Status |
+|---|---|---|
+| a | Enter hike details — required fields (name, location, date, parking, length, difficulty) + optional (description, estimated duration, terrain type), inline validation, confirmation screen before save | ✅ |
+| b | List / view / **edit** / delete hikes, reset all (with confirm dialog) | ✅ |
+| c | Observations — add time-stamped observations to any hike, edit/delete, multiple per hike, defaults to now | ✅ |
+| d | Search by name (prefix match) + advanced filters (location, length, date range) | ✅ |
+| e | Cross-platform prototype (this app) | ✅ |
+| f | Cross-platform persistence via Firestore, realtime sync, offline-capable | ✅ |
+| g | Automatic location capture + weather via OpenWeatherMap when adding a hike | ✅ |
+
+### Known limitations (honest gaps, not yet done)
+
+- Observations don't yet auto-capture location/weather themselves — only the **hike** entry does (feature g). The `observations` schema has `latitude`/`longitude`/`weather` fields reserved for this, but the Observation screen doesn't populate them yet.
+- Tab screens (Home, Hikes, Map) stay mounted (not unmounted) when you switch tabs, per React Navigation's default bottom-tabs behavior — their Firestore listeners keep running in the background rather than fully detaching. Functionally harmless at this data scale, but doesn't fully meet the "detach listeners when not visible" battery guidance in the spec.
+- Search filtering is done client-side over the full `hikes` snapshot (fine at hobby-project scale; wouldn't scale to a large shared dataset without server-side query filters).
+
+---
 
 ## Screenshots
 
-UI designs live in [`design/`](design/). Key screens:
+UI designs live in [`design/`](design/):
 
-| Home | Add Hike | Observations |
+| Home | Hikes list | Search & Filters |
 |---|---|---|
-| ![Home](design/01_home_dashboard.png) | ![Add](design/02_add_new_hike_form.png) | ![Obs](design/06_observations_list.png) |
+| ![Home](design/01_home.png) | ![Hikes](design/02_hikes_list.png) | ![Search](design/03_search_filters.png) |
+
+| Add Hike — Basic | Add Hike — Trail | Add Hike — Location |
+|---|---|---|
+| ![Basic](design/04_add_hike_basic.png) | ![Trail](design/05_add_hike_trail_details.png) | ![Location](design/06_add_hike_location_safety.png) |
+
+| Review Hike | Hike Detail |
+|---|---|
+| ![Review](design/07_review_hike.png) | ![Detail](design/08_hike_detail.png) |
 
 ---
 
 ## Architecture
 
-Layered architecture with a strict one-way dependency flow. Each layer only talks to the layer directly below it.
-
-```mermaid
-flowchart TD
-    U[👤 User] --> P
-
-    subgraph P["PRESENTATION LAYER — src/screens/"]
-        direction LR
-        HS[HomeScreen] ~~~ ES[EntryScreen] ~~~ DS[DetailScreen] ~~~ OS[ObservationScreen] ~~~ SS[SearchScreen]
-    end
-
-    subgraph ST["STATE LAYER — src/context/"]
-        FC[FirebaseContext<br/>global state: hikes list, auth user]
-    end
-
-    subgraph SV["SERVICE LAYER — src/services/"]
-        direction LR
-        HSV[hikeService] ~~~ OSV[observationService] ~~~ WSV[weatherService]
-    end
-
-    subgraph DATA["DATA LAYER — external"]
-        FS[(Firebase Firestore<br/>hikes · observations)]
-        OWM[OpenWeatherMap API]
-    end
-
-    P -->|useContext / call functions| ST
-    ST -->|delegates all data ops| SV
-    HSV & OSV -->|Firebase JS SDK| FS
-    WSV -->|REST GET| OWM
-    FS -.->|realtime snapshot listener| ST
+```
+Screens (src/screens/)
+   │  useContext() for auth state + the add/edit-hike wizard form
+   │  calls service functions directly for all reads/writes
+   ▼
+Context (src/context/)
+   FirebaseContext   — anonymous sign-in gate; exposes { uid, ready }
+   HikeFormContext   — holds the 3-step Add/Edit Hike wizard form state
+   ▼ (screens call services directly, not through context)
+Services (src/services/)
+   hikeService.js         — hikes CRUD + realtime subscribe
+   observationService.js  — observations CRUD + realtime subscribe
+   locationService.js     — expo-location wrapper
+   weatherService.js      — OpenWeatherMap REST call
+   firebaseConfig.js      — Firebase app/auth/firestore init (gitignored)
+   ▼
+Firebase Firestore (collections: hikes, observations) + OpenWeatherMap REST API
 ```
 
-### Layer responsibilities
-
-| Layer | Location | Does | Never does |
-|---|---|---|---|
-| **Presentation** | `src/screens/`, `src/components/` | Render UI, collect input, client-side validation, navigation | Touch Firestore or fetch APIs directly; hold business logic |
-| **State** | `src/context/FirebaseContext.js` | Hold global observable state (hikes list, auth user); expose actions to screens; subscribe to Firestore realtime updates | Render anything; contain query details |
-| **Service** | `src/services/` | All CRUD/queries against Firestore; weather API calls; data mapping (doc ↔ JS object) | Know about React — plain JS modules, no hooks, no components |
-| **Data** | Firebase / OpenWeatherMap | Store documents, enforce Security Rules, push realtime snapshots | — |
-
-This mirrors MVVM: `FirebaseContext` plays the ViewModel role (observable state, no knowledge of views), screens play the View role (dumb rendering), services + Firestore are the Model. The phase-2 Android app implements the same shape literally: `Activity → ViewModel (LiveData) → Repository → Firestore`.
-
-### Data flow — worked example: saving a hike
-
-1. User fills the form on **EntryScreen**, taps *Continue* → screen validates required fields (inline errors if missing) → shows **ConfirmScreen**
-2. User taps *Save Hike* → screen calls `addHike(hike)` obtained from `useContext(FirebaseContext)`
-3. Context delegates to `hikeService.addHike()` → service stamps `userId` + `createdAt` and writes the document via the Firebase SDK
-4. Firestore commits (or queues locally if offline) and fires the **snapshot listener** the Context registered at startup
-5. Context updates its `hikes` state → every subscribed screen (Home, All Hikes) **re-renders automatically** — no manual refresh anywhere
-
-The reverse path (delete, edit, reset) follows the same loop. One source of truth: the Firestore snapshot; screens never keep their own copy of the data.
-
-### Design principles
-
-- **Single source of truth** — UI state derives from the Firestore snapshot via Context; no duplicated lists.
-- **Separation of concerns** — swap Firestore for another backend and only `src/services/` changes.
-- **Offline-first** — writes go to the local cache first; sync is Firebase's job, not ours.
-- **Security lives server-side** — client config is public by design; per-user write access is enforced by `firestore.rules`, not by hiding keys.
-
-Full design record (SRS, ERD, decisions log, report notes): see [`CLAUDE.md`](CLAUDE.md).
+- **UI never calls Firestore directly** — every read/write goes through `src/services/`.
+- **`FirebaseProvider` gates the whole app** on anonymous sign-in completing (`ready === true`) before rendering any screen. This matters: screens subscribe to Firestore in `useEffect` on mount, and a listener that attaches before `request.auth` exists gets a one-time `permission-denied` from Security Rules that it never recovers from — gating avoids that race entirely.
+- **`HikeFormContext`** is shared by the Add-Hike wizard (`EntryBasic → EntryRoute → EntryLocation → Confirm`) and doubles as the Edit-Hike flow: `DetailScreen`'s Edit button calls `startEdit(hike)` to prefill the same form, and `ConfirmScreen` calls `updateHike()` instead of `addHike()` when an `editingHikeId` is present.
+- Data model, Security Rules summary, and full design rationale: see [`CLAUDE.md`](CLAUDE.md). Rules live in [`firestore.rules`](firestore.rules) — **not auto-deployed**; paste into Firebase Console → Firestore Database → Rules → Publish after any change.
 
 ---
 
@@ -100,42 +81,45 @@ Full design record (SRS, ERD, decisions log, report notes): see [`CLAUDE.md`](CL
 ### Prerequisites
 
 - Node.js 18+ and npm
-- **Expo Go** app on your phone (or an Android emulator)
-- A Firebase project — follow [`SETUP_FIREBASE.md`](SETUP_FIREBASE.md) (one-time, ~10 min)
-- An OpenWeatherMap API key (free tier) — see the same guide
+- **Expo Go** app on your phone (or an Android/iOS emulator), or a browser for `expo start --web`
+- A Firebase project with Firestore + Anonymous Auth enabled, with `firestore.rules` published
+- An OpenWeatherMap API key (free tier)
 
 ### Run
 
 ```bash
-cd react-native-app
 npm install
 
-# configure credentials (never committed):
-cp src/services/firebaseConfig.example.js src/services/firebaseConfig.js
-#   → paste your Firebase config values + OpenWeatherMap key into the new file
+# configure credentials (gitignored, never committed):
+cp .env.example .env
+#   → add EXPO_PUBLIC_OPENWEATHER_API_KEY to .env
+# create src/services/firebaseConfig.js exporting `app`, `auth`, `db`
+#   (see the shape in CLAUDE.md's Architecture section)
 
-npx expo start        # scan the QR with Expo Go, or press 'a' for Android emulator
+npx expo start        # scan the QR with Expo Go, press 'a' for Android, or 'w' for web
 ```
 
 ### Project structure
 
 ```
-m-hike/
-├── README.md                  # you are here
-├── CLAUDE.md                  # full design doc / AI context
-├── SETUP_FIREBASE.md          # backend setup guide
-├── firestore.rules            # Firestore security rules (deploy via console)
-├── design/                    # UI mockups (8 screens)
-├── react-native-app/          # features e–g
-│   ├── src/
-│   │   ├── components/        # reusable UI parts
-│   │   ├── screens/           # Home, Entry, Confirm, Detail, Observation, Search
-│   │   ├── navigation/        # React Navigation setup
-│   │   ├── context/           # FirebaseContext (state layer)
-│   │   └── services/          # hikeService, observationService, weatherService, firebaseConfig
-│   ├── App.js
-│   └── package.json
-└── android-app/               # phase 2 — native Java, features a–d
+MHikeRN/
+├── README.md               # you are here
+├── CLAUDE.md                # full design doc / SRS / AI context
+├── firestore.rules          # Firestore security rules (deploy via console)
+├── .env.example              # template for OpenWeatherMap API key
+├── design/                   # UI mockups (8 screens + contact sheet)
+├── assets/images/hikes/      # terrain stock photos (mountain/forest/coastal/valley/other)
+├── App.js
+├── index.js
+└── src/
+    ├── components/           # ScreenHeader, StepIndicator
+    ├── screens/               # Home, Hikes, Detail, EntryBasic/Route/Location, Confirm,
+    │                          # Observation, Search, Map, More
+    ├── navigation/            # RootNavigator (stack) + MainTabNavigator (bottom tabs)
+    ├── context/               # FirebaseContext, HikeFormContext
+    ├── constants/             # theme.js (colors/spacing/typography), terrainImages.js
+    └── services/              # hikeService, observationService, locationService,
+                                # weatherService, firebaseConfig (gitignored)
 ```
 
 ---

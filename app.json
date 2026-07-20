@@ -30,6 +30,12 @@
           "image": "./assets/images/splash-icon.png",
           "imageWidth": 76
         }
+      ],
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "M-Hike uses your location to record where a hike takes place and to fetch local weather conditions."
+        }
       ]
     ],
     "experiments": {

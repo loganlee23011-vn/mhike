@@ -1,16 +1,20 @@
-import { Ionicons } from "@expo/vector-icons";
-import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { MaterialIcons } from "@expo/vector-icons";
+import { useState } from "react";
+import { ActivityIndicator, Alert, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import ScreenHeader from "../components/ScreenHeader";
 import { colors, radius, spacing, typography } from "../constants/theme";
+import { useFirebase } from "../context/FirebaseContext";
+import { useHikeForm } from "../context/HikeFormContext";
+import { addHike, updateHike } from "../services/hikeService";
 
 function ReviewSection({ icon, title, editStep, navigation, rows }) {
   return (
     <View style={styles.section}>
       <View style={styles.sectionHeader}>
         <View style={styles.sectionTitleRow}>
-          <Ionicons name={icon} size={18} color={colors.primary} />
+          <MaterialIcons name={icon} size={18} color={colors.primary} />
           <Text style={styles.sectionTitle}>{title}</Text>
         </View>
         <TouchableOpacity onPress={() => navigation.navigate(editStep)}>
@@ -28,9 +32,54 @@ function ReviewSection({ icon, title, editStep, navigation, rows }) {
 }
 
 export default function ConfirmScreen({ navigation }) {
+  const { form, resetForm, editingHikeId } = useHikeForm();
+  const { uid } = useFirebase();
+  const [saving, setSaving] = useState(false);
+  const isEditing = Boolean(editingHikeId);
+
+  const handleSave = async () => {
+    if (!uid) {
+      Alert.alert("Not signed in yet", "Please wait a moment and try again.");
+      return;
+    }
+    setSaving(true);
+    try {
+      if (isEditing) {
+        await updateHike(editingHikeId, {
+          name: form.name,
+          location: form.location,
+          hikeDate: form.hikeDate,
+          parkingAvailable: form.parkingAvailable,
+          length: Number(form.length),
+          difficulty: form.difficulty,
+          description: form.description ?? "",
+          estimatedDuration: form.estimatedDuration ?? "",
+          terrainType: form.terrainType ?? "",
+          latitude: form.latitude ?? null,
+          longitude: form.longitude ?? null,
+          weather: form.weather ?? null,
+        });
+        resetForm();
+        navigation.replace("Detail", { hikeId: editingHikeId });
+      } else {
+        const id = await addHike(uid, form);
+        resetForm();
+        navigation.replace("Detail", { hikeId: id });
+      }
+    } catch (error) {
+      Alert.alert("Couldn't save hike", error.message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
   return (
     <SafeAreaView style={styles.safe} edges={["top"]}>
-      <ScreenHeader title="Review Hike" subtitle="Please review your hike details" onBack={() => navigation.goBack()} />
+      <ScreenHeader
+        title={isEditing ? "Review Changes" : "Review Hike"}
+        subtitle="Please review your hike details"
+        onBack={() => navigation.goBack()}
+      />
 
       <ScrollView contentContainerStyle={styles.content}>
         <ReviewSection
@@ -39,46 +88,52 @@ export default function ConfirmScreen({ navigation }) {
           editStep="EntryBasic"
           navigation={navigation}
           rows={[
-            { label: "Name", value: "Snowdon Summit" },
-            { label: "Location", value: "Snowdonia National Park, Wales" },
-            { label: "Date", value: "25 May 2024" },
-            { label: "Parking", value: "Yes" },
+            { label: "Name", value: form.name },
+            { label: "Location", value: form.location },
+            { label: "Date", value: form.hikeDate ? form.hikeDate.toDateString() : "—" },
+            { label: "Parking", value: form.parkingAvailable ? "Yes" : "No" },
           ]}
         />
 
         <ReviewSection
-          icon="trail-sign-outline"
+          icon="directions"
           title="Trail Details"
           editStep="EntryRoute"
           navigation={navigation}
           rows={[
-            { label: "Length", value: "9.2 km" },
-            { label: "Difficulty", value: "Moderate" },
-            { label: "Estimated Duration", value: "05:00" },
-            { label: "Terrain Type", value: "Mountain" },
+            { label: "Length", value: `${form.length} km` },
+            { label: "Difficulty", value: form.difficulty },
+            { label: "Estimated Duration", value: form.estimatedDuration || "—" },
+            { label: "Terrain Type", value: form.terrainType },
           ]}
         />
 
         <ReviewSection
-          icon="location-outline"
+          icon="location-on"
           title="Location & Safety"
           editStep="EntryLocation"
           navigation={navigation}
           rows={[
-            { label: "Coordinates", value: "53.0663° N, 4.0754° W" },
-            { label: "Weather", value: "18°C, Partly cloudy" },
-            { label: "Safety Status", value: "Good conditions" },
+            {
+              label: "Coordinates",
+              value: form.latitude ? `${form.latitude.toFixed(4)}, ${form.longitude.toFixed(4)}` : "Not set",
+            },
+            {
+              label: "Weather",
+              value: form.weather ? `${Math.round(form.weather.temperature)}°C, ${form.weather.description}` : "Not checked",
+            },
           ]}
         />
       </ScrollView>
 
       <View style={styles.footer}>
-        <TouchableOpacity
-          style={styles.saveBtn}
-          onPress={() => navigation.replace("Detail", { hikeId: "snowdon-summit" })}
-        >
-          <Ionicons name="save-outline" size={18} color={colors.surface} />
-          <Text style={styles.saveText}>Save Hike</Text>
+        <TouchableOpacity style={styles.saveBtn} onPress={handleSave} disabled={saving}>
+          {saving ? (
+            <ActivityIndicator size="small" color={colors.surface} />
+          ) : (
+            <MaterialIcons name="save" size={18} color={colors.surface} />
+          )}
+          <Text style={styles.saveText}>{isEditing ? "Save Changes" : "Save Hike"}</Text>
         </TouchableOpacity>
       </View>
     </SafeAreaView>

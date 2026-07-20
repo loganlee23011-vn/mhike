@@ -1,19 +1,51 @@
-import { Ionicons } from "@expo/vector-icons";
-import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { MaterialIcons } from "@expo/vector-icons";
+import { useState } from "react";
+import {
+  ActivityIndicator,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import ScreenHeader from "../components/ScreenHeader";
 import StepIndicator from "../components/StepIndicator";
 import { colors, radius, spacing, typography } from "../constants/theme";
+import { useHikeForm } from "../context/HikeFormContext";
+import { getCurrentLocation } from "../services/locationService";
+import { getCurrentWeather } from "../services/weatherService";
 
 export default function EntryLocationScreen({ navigation }) {
+  const { form, setFields, resetForm, editingHikeId } = useHikeForm();
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
+
+  const handleUseLocation = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const coords = await getCurrentLocation();
+      const weather = await getCurrentWeather(coords.latitude, coords.longitude);
+      setFields({ ...coords, weather });
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <SafeAreaView style={styles.safe} edges={["top"]}>
       <ScreenHeader
-        title="Add Hike"
+        title={editingHikeId ? "Edit Hike" : "Add Hike"}
         onBack={() => navigation.goBack()}
         rightIcon="close"
-        onRightPress={() => navigation.popToTop()}
+        onRightPress={() => {
+          resetForm();
+          navigation.popToTop();
+        }}
       />
       <StepIndicator step={3} label="Location & Safety" />
 
@@ -21,30 +53,45 @@ export default function EntryLocationScreen({ navigation }) {
         <Text style={typography.caption}>Set your hike location and check weather and safety conditions.</Text>
 
         <View style={styles.mapPlaceholder}>
-          <Ionicons name="location" size={28} color={colors.primary} />
+          <MaterialIcons name="location-on" size={28} color={colors.primary} />
+          {form.latitude ? (
+            <Text style={typography.caption}>
+              {Math.abs(form.latitude).toFixed(4)}°{form.latitude >= 0 ? "N" : "S"},{" "}
+              {Math.abs(form.longitude).toFixed(4)}°{form.longitude >= 0 ? "E" : "W"}
+            </Text>
+          ) : null}
         </View>
 
         <View style={styles.rowGap}>
-          <TouchableOpacity style={styles.pillBtn}>
-            <Ionicons name="locate-outline" size={16} color={colors.primary} />
+          <TouchableOpacity style={styles.pillBtn} onPress={handleUseLocation} disabled={loading}>
+            {loading ? (
+              <ActivityIndicator size="small" color={colors.primary} />
+            ) : (
+              <MaterialIcons name="my-location" size={16} color={colors.primary} />
+            )}
             <Text style={styles.pillText}>Use current location</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.pillBtn}>
-            <Ionicons name="search-outline" size={16} color={colors.primary} />
-            <Text style={styles.pillText}>Search location</Text>
-          </TouchableOpacity>
         </View>
+        {error ? <Text style={styles.error}>{error}</Text> : null}
 
         <Text style={[typography.h2, styles.sectionTitle]}>Weather Preview</Text>
         <View style={styles.card}>
-          <Text style={styles.temp}>18°C</Text>
-          <Text style={typography.caption}>Partly cloudy</Text>
+          {form.weather ? (
+            <>
+              <Text style={styles.temp}>{Math.round(form.weather.temperature)}°C</Text>
+              <Text style={typography.caption}>{form.weather.description}</Text>
+            </>
+          ) : (
+            <Text style={typography.caption}>Fetch a location to preview conditions.</Text>
+          )}
         </View>
 
-        <View style={styles.safetyCard}>
-          <Ionicons name="shield-checkmark" size={20} color={colors.primary} />
-          <Text style={styles.safetyText}>Conditions look good for your hike!</Text>
-        </View>
+        {form.weather ? (
+          <View style={styles.safetyCard}>
+            <MaterialIcons name="verified-user" size={20} color={colors.primary} />
+            <Text style={styles.safetyText}>Conditions look good for your hike!</Text>
+          </View>
+        ) : null}
       </ScrollView>
 
       <View style={styles.footer}>
@@ -72,6 +119,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     marginVertical: spacing.sm,
+    gap: spacing.xs,
   },
   rowGap: { flexDirection: "row", gap: spacing.sm },
   pillBtn: {
@@ -86,6 +134,7 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.sm,
   },
   pillText: { color: colors.primary, fontWeight: "600", fontSize: 13 },
+  error: { color: colors.danger, fontSize: 12, marginTop: spacing.xs },
   sectionTitle: { marginTop: spacing.md },
   card: {
     backgroundColor: colors.surface,

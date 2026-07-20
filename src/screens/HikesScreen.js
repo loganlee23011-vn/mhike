@@ -1,7 +1,9 @@
-import { Ionicons } from "@expo/vector-icons";
-import { useState } from "react";
+import { MaterialIcons } from "@expo/vector-icons";
+import { useEffect, useState } from "react";
 import {
+  Alert,
   FlatList,
+  Image,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -10,15 +12,35 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { colors, radius, spacing, typography } from "../constants/theme";
-
-const HIKES = [
-  { id: "snowdon-summit", name: "Snowdon Summit", location: "Snowdonia, Wales", date: "Sat, 25 May 2024", length: "9.2 km", difficulty: "Moderate" },
-  { id: "catbells-loop", name: "Catbells Loop", location: "Lake District, England", date: "Sun, 9 Jun 2024", length: "6.0 km", difficulty: "Easy" },
-  { id: "kinder-scout", name: "Kinder Scout", location: "Peak District, England", date: "Sat, 22 Jun 2024", length: "11.3 km", difficulty: "Hard" },
-];
+import { getTerrainImage } from "../constants/terrainImages";
+import { useHikeForm } from "../context/HikeFormContext";
+import { deleteHike, subscribeToHikes } from "../services/hikeService";
 
 export default function HikesScreen({ navigation }) {
   const [tab, setTab] = useState("upcoming");
+  const [hikes, setHikes] = useState([]);
+  const { resetForm } = useHikeForm();
+
+  useEffect(() => {
+    const unsubscribe = subscribeToHikes(setHikes, (err) => console.error(err));
+    return unsubscribe;
+  }, []);
+
+  const now = new Date();
+  const upcoming = hikes.filter((h) => h.hikeDate && h.hikeDate >= now);
+  const completed = hikes.filter((h) => h.hikeDate && h.hikeDate < now);
+  const list = tab === "upcoming" ? upcoming : completed;
+
+  const handleDelete = (hike) => {
+    Alert.alert("Delete hike?", `This removes "${hike.name}" and its observations.`, [
+      { text: "Cancel", style: "cancel" },
+      {
+        text: "Delete",
+        style: "destructive",
+        onPress: () => deleteHike(hike.id).catch((err) => Alert.alert("Delete failed", err.message)),
+      },
+    ]);
+  };
 
   return (
     <SafeAreaView style={styles.safe} edges={["top"]}>
@@ -26,10 +48,10 @@ export default function HikesScreen({ navigation }) {
         <Text style={typography.h1}>Hikes</Text>
         <View style={styles.headerIcons}>
           <TouchableOpacity onPress={() => navigation.navigate("Search")}>
-            <Ionicons name="search-outline" size={22} color={colors.text} />
+            <MaterialIcons name="search" size={22} color={colors.text} />
           </TouchableOpacity>
           <TouchableOpacity onPress={() => navigation.navigate("Search")}>
-            <Ionicons name="options-outline" size={22} color={colors.text} />
+            <MaterialIcons name="tune" size={22} color={colors.text} />
           </TouchableOpacity>
         </View>
       </View>
@@ -40,7 +62,7 @@ export default function HikesScreen({ navigation }) {
           onPress={() => setTab("upcoming")}
         >
           <Text style={tab === "upcoming" ? styles.segmentTextActive : styles.segmentText}>
-            Upcoming (3)
+            Upcoming ({upcoming.length})
           </Text>
         </TouchableOpacity>
         <TouchableOpacity
@@ -48,38 +70,49 @@ export default function HikesScreen({ navigation }) {
           onPress={() => setTab("completed")}
         >
           <Text style={tab === "completed" ? styles.segmentTextActive : styles.segmentText}>
-            Completed (5)
+            Completed ({completed.length})
           </Text>
         </TouchableOpacity>
       </View>
 
       <FlatList
-        data={HIKES}
+        data={list}
         keyExtractor={(item) => item.id}
         contentContainerStyle={styles.list}
+        ListEmptyComponent={
+          <Text style={[typography.caption, styles.empty]}>No hikes here yet.</Text>
+        }
         renderItem={({ item }) => (
           <TouchableOpacity
             style={styles.card}
             onPress={() => navigation.navigate("Detail", { hikeId: item.id })}
           >
-            <View style={styles.cardHeader}>
-              <Text style={styles.cardTitle}>{item.name}</Text>
-              <Ionicons name="ellipsis-vertical" size={18} color={colors.textMuted} />
+            <Image source={getTerrainImage(item.terrainType)} style={styles.thumb} />
+            <View style={styles.cardBody}>
+              <View style={styles.cardHeader}>
+                <Text style={styles.cardTitle}>{item.name}</Text>
+                <TouchableOpacity onPress={() => handleDelete(item)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                  <MaterialIcons name="more-vert" size={18} color={colors.textMuted} />
+                </TouchableOpacity>
+              </View>
+              <Text style={typography.caption}>{item.location}</Text>
+              <Text style={typography.caption}>{item.hikeDate?.toDateString()}</Text>
+              <Text style={typography.caption}>
+                {item.length} km · {item.difficulty}
+              </Text>
             </View>
-            <Text style={typography.caption}>{item.location}</Text>
-            <Text style={typography.caption}>{item.date}</Text>
-            <Text style={typography.caption}>
-              {item.length} · {item.difficulty}
-            </Text>
           </TouchableOpacity>
         )}
       />
 
       <TouchableOpacity
         style={styles.fab}
-        onPress={() => navigation.navigate("EntryBasic")}
+        onPress={() => {
+          resetForm();
+          navigation.navigate("EntryBasic");
+        }}
       >
-        <Ionicons name="add" size={28} color={colors.surface} />
+        <MaterialIcons name="add" size={28} color={colors.surface} />
       </TouchableOpacity>
     </SafeAreaView>
   );
@@ -112,13 +145,18 @@ const styles = StyleSheet.create({
   segmentText: { color: colors.text, fontWeight: "600" },
   segmentTextActive: { color: colors.surface, fontWeight: "600" },
   list: { paddingHorizontal: spacing.md, paddingBottom: spacing.xl * 2, gap: spacing.sm },
+  empty: { textAlign: "center", marginTop: spacing.xl },
   card: {
+    flexDirection: "row",
+    gap: spacing.sm,
     backgroundColor: colors.surface,
     borderRadius: radius.lg,
-    padding: spacing.md,
+    padding: spacing.sm,
     borderWidth: 1,
     borderColor: colors.border,
   },
+  thumb: { width: 64, height: 64, borderRadius: radius.md },
+  cardBody: { flex: 1, justifyContent: "center" },
   cardHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
   cardTitle: { fontSize: 17, fontWeight: "700", color: colors.text },
   fab: {

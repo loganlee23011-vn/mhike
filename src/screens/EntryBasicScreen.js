@@ -12,17 +12,56 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import ScreenHeader from "../components/ScreenHeader";
 import StepIndicator from "../components/StepIndicator";
 import { colors, radius, spacing } from "../constants/theme";
+import { useHikeForm } from "../context/HikeFormContext";
+
+function parseDate(text) {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(text.trim());
+  if (!match) return null;
+  const date = new Date(`${text.trim()}T00:00:00`);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function toDateInputText(date) {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, "0");
+  const d = String(date.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
+}
 
 export default function EntryBasicScreen({ navigation }) {
-  const [parking, setParking] = useState(null);
+  const { form, setFields, resetForm, editingHikeId } = useHikeForm();
+  const [dateText, setDateText] = useState(
+    form.hikeDate ? toDateInputText(form.hikeDate) : ""
+  );
+  const [errors, setErrors] = useState({});
+
+  const handleContinue = () => {
+    const hikeDate = parseDate(dateText);
+    const nextErrors = {};
+    if (!form.name.trim()) nextErrors.name = "Hike name is required.";
+    if (!form.location.trim()) nextErrors.location = "Location is required.";
+    if (!hikeDate) nextErrors.date = "Enter a valid date (YYYY-MM-DD).";
+    if (form.parkingAvailable === null) nextErrors.parking = "Select an option.";
+
+    if (Object.keys(nextErrors).length > 0) {
+      setErrors(nextErrors);
+      return;
+    }
+
+    setFields({ hikeDate });
+    navigation.navigate("EntryRoute");
+  };
 
   return (
     <SafeAreaView style={styles.safe} edges={["top"]}>
       <ScreenHeader
-        title="Add Hike"
+        title={editingHikeId ? "Edit Hike" : "Add Hike"}
         onBack={() => navigation.goBack()}
         rightIcon="close"
-        onRightPress={() => navigation.popToTop()}
+        onRightPress={() => {
+          resetForm();
+          navigation.popToTop();
+        }}
       />
       <StepIndicator step={1} label="Basic Information" />
 
@@ -30,44 +69,65 @@ export default function EntryBasicScreen({ navigation }) {
         <Text style={styles.hint}>Tell us about your hike.</Text>
 
         <Text style={styles.label}>Hike Name *</Text>
-        <TextInput style={styles.input} placeholder="e.g. Snowdon Summit" placeholderTextColor={colors.textMuted} />
+        <TextInput
+          style={styles.input}
+          placeholder="e.g. Snowdon Summit"
+          placeholderTextColor={colors.textMuted}
+          value={form.name}
+          onChangeText={(name) => setFields({ name })}
+        />
+        {errors.name ? <Text style={styles.error}>{errors.name}</Text> : null}
 
         <Text style={styles.label}>Location *</Text>
-        <TextInput style={styles.input} placeholder="e.g. Snowdonia National Park, Wales" placeholderTextColor={colors.textMuted} />
+        <TextInput
+          style={styles.input}
+          placeholder="e.g. Snowdonia National Park, Wales"
+          placeholderTextColor={colors.textMuted}
+          value={form.location}
+          onChangeText={(location) => setFields({ location })}
+        />
+        {errors.location ? <Text style={styles.error}>{errors.location}</Text> : null}
 
         <Text style={styles.label}>Date *</Text>
-        <TextInput style={styles.input} placeholder="Select date" placeholderTextColor={colors.textMuted} />
+        <TextInput
+          style={styles.input}
+          placeholder="YYYY-MM-DD"
+          placeholderTextColor={colors.textMuted}
+          value={dateText}
+          onChangeText={setDateText}
+        />
+        {errors.date ? <Text style={styles.error}>{errors.date}</Text> : null}
 
         <Text style={styles.label}>Parking Available *</Text>
         <View style={styles.toggleRow}>
           <TouchableOpacity
-            style={[styles.toggle, parking === true && styles.toggleActive]}
-            onPress={() => setParking(true)}
+            style={[styles.toggle, form.parkingAvailable === true && styles.toggleActive]}
+            onPress={() => setFields({ parkingAvailable: true })}
           >
-            <Text style={parking === true ? styles.toggleTextActive : styles.toggleText}>Yes</Text>
+            <Text style={form.parkingAvailable === true ? styles.toggleTextActive : styles.toggleText}>Yes</Text>
           </TouchableOpacity>
           <TouchableOpacity
-            style={[styles.toggle, parking === false && styles.toggleActive]}
-            onPress={() => setParking(false)}
+            style={[styles.toggle, form.parkingAvailable === false && styles.toggleActive]}
+            onPress={() => setFields({ parkingAvailable: false })}
           >
-            <Text style={parking === false ? styles.toggleTextActive : styles.toggleText}>No</Text>
+            <Text style={form.parkingAvailable === false ? styles.toggleTextActive : styles.toggleText}>No</Text>
           </TouchableOpacity>
         </View>
+        {errors.parking ? <Text style={styles.error}>{errors.parking}</Text> : null}
 
         <Text style={styles.label}>Description (optional)</Text>
         <TextInput
           style={[styles.input, styles.multiline]}
           placeholder="A classic hike to the highest peak..."
           placeholderTextColor={colors.textMuted}
+          value={form.description}
+          onChangeText={(description) => setFields({ description })}
           multiline
         />
       </ScrollView>
 
       <View style={styles.footer}>
-        <TouchableOpacity
-          style={styles.continueBtn}
-          onPress={() => navigation.navigate("EntryRoute")}
-        >
+        <TouchableOpacity style={styles.continueBtn} onPress={handleContinue}>
           <Text style={styles.continueText}>Continue</Text>
         </TouchableOpacity>
       </View>
@@ -89,6 +149,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surface,
     color: colors.text,
   },
+  error: { color: colors.danger, fontSize: 12, marginTop: 4 },
   multiline: { minHeight: 80, textAlignVertical: "top" },
   toggleRow: { flexDirection: "row", gap: spacing.sm },
   toggle: {

@@ -1,4 +1,4 @@
-import { Ionicons } from "@expo/vector-icons";
+import { MaterialIcons } from "@expo/vector-icons";
 import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
 
 import { colors, spacing, typography } from "../constants/theme";
@@ -17,7 +17,7 @@ export default function ScreenHeader({
           onPress={onBack}
           hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
         >
-          <Ionicons name="arrow-back" size={24} color={colors.text} />
+          <MaterialIcons name="arrow-back" size={24} color={colors.text} />
         </TouchableOpacity>
       ) : (
         <View style={styles.spacer} />
@@ -33,7 +33,7 @@ export default function ScreenHeader({
           onPress={onRightPress}
           hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
         >
-          <Ionicons name={rightIcon} size={22} color={colors.text} />
+          <MaterialIcons name={rightIcon} size={22} color={colors.text} />
         </TouchableOpacity>
       ) : (
         <View style={styles.spacer} />

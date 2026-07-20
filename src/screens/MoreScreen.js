@@ -1,29 +1,59 @@
-import { Ionicons } from "@expo/vector-icons";
-import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { MaterialIcons } from "@expo/vector-icons";
+import { useState } from "react";
+import { ActivityIndicator, Alert, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { colors, radius, spacing, typography } from "../constants/theme";
-
-const ROWS = [
-  { key: "search", label: "Search hikes", icon: "search-outline", screen: "Search" },
-  { key: "reset", label: "Reset database", icon: "trash-outline" },
-  { key: "about", label: "About M-Hike", icon: "information-circle-outline" },
-];
+import { useFirebase } from "../context/FirebaseContext";
+import { resetHikes } from "../services/hikeService";
 
 export default function MoreScreen({ navigation }) {
+  const { uid } = useFirebase();
+  const [resetting, setResetting] = useState(false);
+
+  const handleReset = () => {
+    Alert.alert(
+      "Reset database?",
+      "This permanently deletes all your hikes and observations.",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Reset",
+          style: "destructive",
+          onPress: async () => {
+            setResetting(true);
+            try {
+              await resetHikes(uid);
+            } catch (err) {
+              Alert.alert("Reset failed", err.message);
+            } finally {
+              setResetting(false);
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const rows = [
+    { key: "search", label: "Search hikes", icon: "search", onPress: () => navigation.navigate("Search") },
+    { key: "reset", label: "Reset database", icon: "delete-outline", onPress: handleReset },
+    { key: "about", label: "About M-Hike", icon: "info-outline", onPress: () => {} },
+  ];
+
   return (
     <SafeAreaView style={styles.safe} edges={["top"]}>
       <Text style={[typography.h1, styles.title]}>More</Text>
       <View style={styles.list}>
-        {ROWS.map((row) => (
-          <TouchableOpacity
-            key={row.key}
-            style={styles.row}
-            onPress={() => row.screen && navigation.navigate(row.screen)}
-          >
-            <Ionicons name={row.icon} size={20} color={colors.primary} />
+        {rows.map((row) => (
+          <TouchableOpacity key={row.key} style={styles.row} onPress={row.onPress} disabled={resetting}>
+            {row.key === "reset" && resetting ? (
+              <ActivityIndicator size="small" color={colors.primary} />
+            ) : (
+              <MaterialIcons name={row.icon} size={20} color={colors.primary} />
+            )}
             <Text style={styles.rowLabel}>{row.label}</Text>
-            <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
+            <MaterialIcons name="chevron-right" size={18} color={colors.textMuted} />
           </TouchableOpacity>
         ))}
       </View>

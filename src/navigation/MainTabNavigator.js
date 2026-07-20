@@ -1,4 +1,4 @@
-import { Ionicons } from "@expo/vector-icons";
+import { MaterialIcons } from "@expo/vector-icons";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 
 import { colors } from "../constants/theme";
@@ -10,10 +10,10 @@ import MoreScreen from "../screens/MoreScreen";
 const Tab = createBottomTabNavigator();
 
 const ICONS = {
-  Home: ["home", "home-outline"],
-  Hikes: ["bag-handle", "bag-handle-outline"],
-  Map: ["map", "map-outline"],
-  More: ["ellipsis-horizontal", "ellipsis-horizontal-outline"],
+  Home: "home",
+  Hikes: "backpack",
+  Map: "map",
+  More: "more-horiz",
 };
 
 export default function MainTabNavigator() {
@@ -24,10 +24,9 @@ export default function MainTabNavigator() {
         tabBarActiveTintColor: colors.primary,
         tabBarInactiveTintColor: colors.textMuted,
         tabBarStyle: { backgroundColor: colors.surface, borderTopColor: colors.border },
-        tabBarIcon: ({ focused, color, size }) => {
-          const [active, inactive] = ICONS[route.name];
-          return <Ionicons name={focused ? active : inactive} size={size} color={color} />;
-        },
+        tabBarIcon: ({ color, size }) => (
+          <MaterialIcons name={ICONS[route.name]} size={size} color={color} />
+        ),
       })}
     >
       <Tab.Screen name="Home" component={HomeScreen} />
