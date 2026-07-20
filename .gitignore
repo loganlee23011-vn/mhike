@@ -3,6 +3,11 @@
 # dependencies
 node_modules/
 
+
+# --- credentials (never commit) ---
+**/firebaseConfig.js
+**/google-services.json
+
 # Expo
 .expo/
 dist/

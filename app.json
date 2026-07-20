@@ -20,22 +20,19 @@
       "predictiveBackGestureEnabled": false
     },
     "web": {
-      "output": "static",
       "favicon": "./assets/images/favicon.png"
     },
     "plugins": [
-      "expo-router",
       [
         "expo-splash-screen",
         {
-          "backgroundColor": "#208AEF",
+          "backgroundColor": "#F7F5F0",
           "image": "./assets/images/splash-icon.png",
           "imageWidth": 76
         }
       ]
     ],
     "experiments": {
-      "typedRoutes": true,
       "reactCompiler": true
     }
   }
