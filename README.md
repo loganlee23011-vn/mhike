@@ -4,7 +4,7 @@ A hiker management app — record planned hikes, log observations during a hike,
 
 Coursework for **COMP1786 — Mobile Application Design and Development** (University of Greenwich, 2025/26).
 
-**Tech:** React Native (Expo SDK 57) · Firebase Firestore · Firebase Anonymous Auth · React Navigation · OpenWeatherMap API · Leaflet (via WebView, for the Map tab)
+**Tech:** React Native (Expo SDK 57) · Firebase Firestore · Firebase Email/Password Auth · React Navigation · OpenWeatherMap API · Leaflet (via WebView, for the Map tab)
 
 > This repo currently contains the React Native app only (coursework features e–g, which also cover the full functional scope a–d as the reference implementation). The native Android/Java port (features a–d) is a later phase and is not in this repo yet.
 
@@ -56,7 +56,7 @@ Screens (src/screens/)
    │  calls service functions directly for all reads/writes
    ▼
 Context (src/context/)
-   FirebaseContext   — anonymous sign-in gate; exposes { uid, ready }
+   FirebaseContext   — auth-state gate; exposes { uid, ready }
    HikeFormContext   — holds the 3-step Add/Edit Hike wizard form state
    ▼ (screens call services directly, not through context)
 Services (src/services/)
@@ -70,7 +70,8 @@ Firebase Firestore (collections: hikes, observations) + OpenWeatherMap REST API
 ```
 
 - **UI never calls Firestore directly** — every read/write goes through `src/services/`.
-- **`FirebaseProvider` gates the whole app** on anonymous sign-in completing (`ready === true`) before rendering any screen. This matters: screens subscribe to Firestore in `useEffect` on mount, and a listener that attaches before `request.auth` exists gets a one-time `permission-denied` from Security Rules that it never recovers from — gating avoids that race entirely.
+- **`FirebaseProvider` gates the whole app** on the initial auth check completing (`ready === true`) before rendering Login vs. the main app. This matters: screens subscribe to Firestore in `useEffect` on mount, and a listener that attaches before `request.auth` exists gets a one-time `permission-denied` from Security Rules that it never recovers from — gating avoids that race entirely.
+- **Signed-out users see `AuthNavigator`** (Login/Register screens); signed-in users see the main tab navigator — `RootNavigator` branches on `uid` from `FirebaseContext`.
 - **`HikeFormContext`** is shared by the Add-Hike wizard (`EntryBasic → EntryRoute → EntryLocation → Confirm`) and doubles as the Edit-Hike flow: `DetailScreen`'s Edit button calls `startEdit(hike)` to prefill the same form, and `ConfirmScreen` calls `updateHike()` instead of `addHike()` when an `editingHikeId` is present.
 - Data model, Security Rules summary, and full design rationale: see [`CLAUDE.md`](CLAUDE.md). Rules live in [`firestore.rules`](firestore.rules) — **not auto-deployed**; paste into Firebase Console → Firestore Database → Rules → Publish after any change.
 
@@ -82,7 +83,7 @@ Firebase Firestore (collections: hikes, observations) + OpenWeatherMap REST API
 
 - Node.js 18+ and npm
 - **Expo Go** app on your phone (or an Android/iOS emulator), or a browser for `expo start --web`
-- A Firebase project with Firestore + Anonymous Auth enabled, with `firestore.rules` published
+- A Firebase project with Firestore + Email/Password Auth enabled (Authentication → Sign-in method), with `firestore.rules` published
 - An OpenWeatherMap API key (free tier)
 
 ### Run
@@ -98,6 +99,17 @@ cp .env.example .env
 
 npx expo start        # scan the QR with Expo Go, press 'a' for Android, or 'w' for web
 ```
+
+### Test accounts
+
+Two demo accounts exist on the shared Firebase project for testing the Login/Register flow (each owns its own hikes/observations, per the Security Rules):
+
+| Email | Password |
+|---|---|
+| hiker1@mhike.test | MHike#2026a |
+| hiker2@mhike.test | MHike#2026b |
+
+> Coursework demo credentials only — rotate or delete these before making the repo public.
 
 ### Project structure
 

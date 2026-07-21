@@ -1,4 +1,4 @@
-import { onAuthStateChanged, signInAnonymously } from "firebase/auth";
+import { onAuthStateChanged } from "firebase/auth";
 import { createContext, useContext, useEffect, useState } from "react";
 import { ActivityIndicator, StyleSheet, View } from "react-native";
 
@@ -13,23 +13,14 @@ export function FirebaseProvider({ children }) {
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
-      if (user) {
-        setUid(user.uid);
-        setReady(true);
-      } else {
-        signInAnonymously(auth).catch((error) => {
-          console.error("Anonymous sign-in failed", error);
-          setReady(true);
-        });
-      }
+      setUid(user ? user.uid : null);
+      setReady(true);
     });
     return unsubscribe;
   }, []);
 
-  // Screens subscribe to Firestore on mount; mounting them before anonymous
-  // sign-in resolves attaches listeners while request.auth is still null,
-  // which Firestore Security Rules reject with a permission-denied error
-  // that the listener never recovers from. Gate rendering on `ready`.
+  // Wait for the initial auth check before rendering Login vs. the main app,
+  // otherwise every launch flashes the login screen for a signed-in user.
   if (!ready) {
     return (
       <View style={styles.loading}>

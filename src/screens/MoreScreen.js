@@ -5,11 +5,23 @@ import { SafeAreaView } from "react-native-safe-area-context";
 
 import { colors, radius, spacing, typography } from "../constants/theme";
 import { useFirebase } from "../context/FirebaseContext";
+import { signOutUser } from "../services/authService";
 import { resetHikes } from "../services/hikeService";
 
 export default function MoreScreen({ navigation }) {
   const { uid } = useFirebase();
   const [resetting, setResetting] = useState(false);
+
+  const handleLogout = () => {
+    Alert.alert("Log out?", "You'll need to sign in again to access your hikes.", [
+      { text: "Cancel", style: "cancel" },
+      {
+        text: "Log out",
+        style: "destructive",
+        onPress: () => signOutUser().catch((err) => Alert.alert("Log out failed", err.message)),
+      },
+    ]);
+  };
 
   const handleReset = () => {
     Alert.alert(
@@ -39,6 +51,7 @@ export default function MoreScreen({ navigation }) {
     { key: "search", label: "Search hikes", icon: "search", onPress: () => navigation.navigate("Search") },
     { key: "reset", label: "Reset database", icon: "delete-outline", onPress: handleReset },
     { key: "about", label: "About M-Hike", icon: "info-outline", onPress: () => {} },
+    { key: "logout", label: "Log out", icon: "logout", onPress: handleLogout },
   ];
 
   return (

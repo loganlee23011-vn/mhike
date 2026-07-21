@@ -24,8 +24,8 @@ The submission consists of **two apps sharing one Firebase backend**:
 2. **MVVM from the start** (not MVC) for the Android app.
    - Reasons: Firestore snapshot listeners survive rotation inside ViewModel (no leak / duplicate callbacks); ViewModels are unit-testable; form state survives configuration changes.
    - React Native reaches the same separation of concerns via Context API + hooks (hooks/state play the ViewModel role).
-3. **Anonymous Authentication** (Firebase Auth).
-   - Every document carries a `userId`; Security Rules allow public read (sharing) but only the owner can update/delete. No login UI needed.
+3. **Email/Password Authentication** (Firebase Auth).
+   - Every document carries a `userId`; Security Rules allow public read (sharing) but only the owner can update/delete. Users register/sign in with email + password (Login/Register screens); no anonymous fallback.
 4. **Feature g) choice:** automatic location capture + external weather API (OpenWeatherMap) — covers two of the spec's suggested enhancements ("pick up the location automatically" + "use an external web service") in one implementation.
 5. **Design process follows the SCADET framework** (System requirements → Considerations → Architecture & API design → Evaluation → Trade-offs). Reference: Fahim ul Haq, "A detailed guide on Mobile System Design", Medium, 2026.
 
@@ -98,7 +98,7 @@ Rules:
 | Field | Type | Notes |
 |---|---|---|
 | id | string | document id (auto) |
-| userId | string | owner (Anonymous Auth UID) |
+| userId | string | owner (Firebase Auth UID) |
 | name | string | required |
 | location | string | required |
 | hikeDate | timestamp | required |
@@ -139,6 +139,7 @@ Android bottom navigation: Home · Add Hike · Hikes · Search.
 6. **Observations list** — per hike, item menu for edit/delete
 7. **Add/Edit Observation** — same form both modes; delete icon in header
 8. **Search** — name search + **Advanced** expander (location, length, date filters)
+9. **Login / Register** — email + password, inline validation, shown when signed out
 
 ---
 
@@ -154,7 +155,7 @@ MHikeRN/
 │   ├── components/     # reusable UI parts
 │   ├── screens/        # HomeScreen, EntryScreen, DetailScreen, ObservationScreen, SearchScreen
 │   ├── navigation/     # React Navigation setup
-│   ├── services/       # hikeService.js, observationService.js, weatherService.js
+│   ├── services/       # hikeService.js, observationService.js, weatherService.js, authService.js
 │   ├── context/        # FirebaseContext
 │   └── App.js
 ├── index.js
