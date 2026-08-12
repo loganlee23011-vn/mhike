@@ -36,7 +36,10 @@
         {
           "locationWhenInUsePermission": "M-Hike uses your location to record where a hike takes place and to fetch local weather conditions."
         }
-      ]
+      ],
+      "expo-font",
+      "expo-secure-store",
+      "@react-native-community/datetimepicker"
     ],
     "experiments": {
       "reactCompiler": true

@@ -1,5 +1,7 @@
+import DateTimePicker from "@react-native-community/datetimepicker";
 import { useState } from "react";
 import {
+  Platform,
   ScrollView,
   StyleSheet,
   Text,
@@ -14,33 +16,25 @@ import StepIndicator from "../components/StepIndicator";
 import { colors, radius, spacing } from "../constants/theme";
 import { useHikeForm } from "../context/HikeFormContext";
 
-function parseDate(text) {
-  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(text.trim());
-  if (!match) return null;
-  const date = new Date(`${text.trim()}T00:00:00`);
-  return Number.isNaN(date.getTime()) ? null : date;
-}
-
-function toDateInputText(date) {
-  const y = date.getFullYear();
-  const m = String(date.getMonth() + 1).padStart(2, "0");
-  const d = String(date.getDate()).padStart(2, "0");
-  return `${y}-${m}-${d}`;
+function formatDate(date) {
+  return date.toLocaleDateString(undefined, {
+    weekday: "short",
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+  });
 }
 
 export default function EntryBasicScreen({ navigation }) {
   const { form, setFields, resetForm, editingHikeId } = useHikeForm();
-  const [dateText, setDateText] = useState(
-    form.hikeDate ? toDateInputText(form.hikeDate) : ""
-  );
+  const [showPicker, setShowPicker] = useState(false);
   const [errors, setErrors] = useState({});
 
   const handleContinue = () => {
-    const hikeDate = parseDate(dateText);
     const nextErrors = {};
     if (!form.name.trim()) nextErrors.name = "Hike name is required.";
     if (!form.location.trim()) nextErrors.location = "Location is required.";
-    if (!hikeDate) nextErrors.date = "Enter a valid date (YYYY-MM-DD).";
+    if (!form.hikeDate) nextErrors.date = "Select a date.";
     if (form.parkingAvailable === null) nextErrors.parking = "Select an option.";
 
     if (Object.keys(nextErrors).length > 0) {
@@ -48,8 +42,14 @@ export default function EntryBasicScreen({ navigation }) {
       return;
     }
 
-    setFields({ hikeDate });
     navigation.navigate("EntryRoute");
+  };
+
+  const handleDateChange = (event, selectedDate) => {
+    if (Platform.OS === "android") setShowPicker(false);
+    if (event.type === "set" && selectedDate) {
+      setFields({ hikeDate: selectedDate });
+    }
   };
 
   return (
@@ -89,14 +89,27 @@ export default function EntryBasicScreen({ navigation }) {
         {errors.location ? <Text style={styles.error}>{errors.location}</Text> : null}
 
         <Text style={styles.label}>Date *</Text>
-        <TextInput
-          style={styles.input}
-          placeholder="YYYY-MM-DD"
-          placeholderTextColor={colors.textMuted}
-          value={dateText}
-          onChangeText={setDateText}
-        />
+        <TouchableOpacity style={styles.input} onPress={() => setShowPicker(true)}>
+          <Text style={form.hikeDate ? styles.dateText : styles.datePlaceholder}>
+            {form.hikeDate ? formatDate(form.hikeDate) : "Select a date"}
+          </Text>
+        </TouchableOpacity>
         {errors.date ? <Text style={styles.error}>{errors.date}</Text> : null}
+        {showPicker ? (
+          <View style={Platform.OS === "ios" ? styles.iosPickerWrap : undefined}>
+            <DateTimePicker
+              value={form.hikeDate ?? new Date()}
+              mode="date"
+              display={Platform.OS === "ios" ? "spinner" : "default"}
+              onChange={handleDateChange}
+            />
+            {Platform.OS === "ios" ? (
+              <TouchableOpacity style={styles.doneBtn} onPress={() => setShowPicker(false)}>
+                <Text style={styles.doneText}>Done</Text>
+              </TouchableOpacity>
+            ) : null}
+          </View>
+        ) : null}
 
         <Text style={styles.label}>Parking Available *</Text>
         <View style={styles.toggleRow}>
@@ -150,6 +163,17 @@ const styles = StyleSheet.create({
     color: colors.text,
   },
   error: { color: colors.danger, fontSize: 12, marginTop: 4 },
+  dateText: { color: colors.text },
+  datePlaceholder: { color: colors.textMuted },
+  iosPickerWrap: {
+    backgroundColor: colors.surface,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+    marginTop: spacing.xs,
+  },
+  doneBtn: { alignItems: "center", paddingVertical: spacing.sm, borderTopWidth: 1, borderTopColor: colors.border },
+  doneText: { color: colors.primary, fontWeight: "700" },
   multiline: { minHeight: 80, textAlignVertical: "top" },
   toggleRow: { flexDirection: "row", gap: spacing.sm },
   toggle: {

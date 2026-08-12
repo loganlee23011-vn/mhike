@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { Ionicons } from "@expo/vector-icons";
+import { useEffect, useState } from "react";
 import {
   KeyboardAvoidingView,
   Platform,
@@ -13,12 +14,25 @@ import { SafeAreaView } from "react-native-safe-area-context";
 
 import { colors, radius, spacing, typography } from "../constants/theme";
 import { signInWithEmail } from "../services/authService";
+import { clearCredentials, loadCredentials, saveCredentials } from "../services/savedCredentials";
 
 export default function LoginScreen({ navigation }) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [rememberMe, setRememberMe] = useState(false);
   const [errors, setErrors] = useState({});
   const [submitting, setSubmitting] = useState(false);
+
+  // Pre-fill from the last "Remember me" login, if any.
+  useEffect(() => {
+    loadCredentials().then(({ email: savedEmail, password: savedPassword }) => {
+      if (savedEmail && savedPassword) {
+        setEmail(savedEmail);
+        setPassword(savedPassword);
+        setRememberMe(true);
+      }
+    });
+  }, []);
 
   const handleLogin = async () => {
     const nextErrors = {};
@@ -33,6 +47,11 @@ export default function LoginScreen({ navigation }) {
     setSubmitting(true);
     try {
       await signInWithEmail(email, password);
+      if (rememberMe) {
+        await saveCredentials(email.trim(), password);
+      } else {
+        await clearCredentials();
+      }
     } catch (error) {
       setErrors({ form: error.message });
     } finally {
@@ -77,6 +96,17 @@ export default function LoginScreen({ navigation }) {
             autoComplete="password"
           />
           {errors.password ? <Text style={styles.error}>{errors.password}</Text> : null}
+
+          <TouchableOpacity
+            style={styles.rememberRow}
+            onPress={() => setRememberMe((prev) => !prev)}
+            activeOpacity={0.7}
+          >
+            <View style={[styles.checkbox, rememberMe && styles.checkboxChecked]}>
+              {rememberMe ? <Ionicons name="checkmark" size={14} color={colors.surface} /> : null}
+            </View>
+            <Text style={styles.rememberText}>Remember me (save password)</Text>
+          </TouchableOpacity>
 
           {errors.form ? <Text style={[styles.error, styles.formError]}>{errors.form}</Text> : null}
 
@@ -129,6 +159,19 @@ const styles = StyleSheet.create({
   },
   error: { color: colors.danger, fontSize: 12, marginTop: 4 },
   formError: { textAlign: "center", marginTop: spacing.sm },
+  rememberRow: { flexDirection: "row", alignItems: "center", marginTop: spacing.md },
+  checkbox: {
+    width: 20,
+    height: 20,
+    borderRadius: radius.sm,
+    borderWidth: 1.5,
+    borderColor: colors.border,
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: spacing.sm,
+  },
+  checkboxChecked: { backgroundColor: colors.primary, borderColor: colors.primary },
+  rememberText: { color: colors.text, fontSize: 14 },
   submitBtn: {
     backgroundColor: colors.primary,
     borderRadius: radius.md,

@@ -60,11 +60,24 @@ export default function ConfirmScreen({ navigation }) {
           weather: form.weather ?? null,
         });
         resetForm();
-        navigation.replace("Detail", { hikeId: editingHikeId });
+        // Drop the whole Entry/Confirm wizard from the stack and land on the
+        // edited hike's Detail screen so the user sees the result of the edit.
+        navigation.reset({
+          index: 1,
+          routes: [
+            { name: "MainTabs", params: { screen: "Home" } },
+            { name: "Detail", params: { hikeId: editingHikeId } },
+          ],
+        });
       } else {
-        const id = await addHike(uid, form);
+        await addHike(uid, form);
         resetForm();
-        navigation.replace("Detail", { hikeId: id });
+        // Reset (not replace) so the whole Entry/Confirm wizard is dropped from
+        // the stack too — otherwise Back from Home would step back into it.
+        navigation.reset({
+          index: 0,
+          routes: [{ name: "MainTabs", params: { screen: "Home" } }],
+        });
       }
     } catch (error) {
       Alert.alert("Couldn't save hike", error.message);

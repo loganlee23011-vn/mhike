@@ -13,23 +13,32 @@ import { SafeAreaView } from "react-native-safe-area-context";
 
 import { colors, radius, spacing, typography } from "../constants/theme";
 import { getTerrainImage } from "../constants/terrainImages";
+import { useFirebase } from "../context/FirebaseContext";
 import { useHikeForm } from "../context/HikeFormContext";
 import { deleteHike, subscribeToHikes } from "../services/hikeService";
 
 export default function HikesScreen({ navigation }) {
+  const { uid } = useFirebase();
   const [tab, setTab] = useState("upcoming");
   const [hikes, setHikes] = useState([]);
-  const { resetForm } = useHikeForm();
+  const { resetForm, startEdit } = useHikeForm();
 
   useEffect(() => {
     const unsubscribe = subscribeToHikes(setHikes, (err) => console.error(err));
     return unsubscribe;
   }, []);
 
-  const now = new Date();
-  const upcoming = hikes.filter((h) => h.hikeDate && h.hikeDate >= now);
-  const completed = hikes.filter((h) => h.hikeDate && h.hikeDate < now);
+  // Completed is a manual flag set from DetailScreen, not derived from the
+  // date — a hike whose date has passed but was never marked done stays
+  // under Upcoming instead of silently disappearing into Completed.
+  const upcoming = hikes.filter((h) => !h.completed);
+  const completed = hikes.filter((h) => h.completed);
   const list = tab === "upcoming" ? upcoming : completed;
+
+  const handleEdit = (hike) => {
+    startEdit(hike);
+    navigation.navigate("EntryBasic");
+  };
 
   const handleDelete = (hike) => {
     Alert.alert("Delete hike?", `This removes "${hike.name}" and its observations.`, [
@@ -42,6 +51,14 @@ export default function HikesScreen({ navigation }) {
     ]);
   };
 
+  const handleMenu = (hike) => {
+    Alert.alert(undefined, undefined, [
+      { text: "Edit", onPress: () => handleEdit(hike) },
+      { text: "Delete", style: "destructive", onPress: () => handleDelete(hike) },
+      { text: "Cancel", style: "cancel" },
+    ]);
+  };
+
   return (
     <SafeAreaView style={styles.safe} edges={["top"]}>
       <View style={styles.headerRow}>
@@ -49,9 +66,6 @@ export default function HikesScreen({ navigation }) {
         <View style={styles.headerIcons}>
           <TouchableOpacity onPress={() => navigation.navigate("Search")}>
             <MaterialIcons name="search" size={22} color={colors.text} />
-          </TouchableOpacity>
-          <TouchableOpacity onPress={() => navigation.navigate("Search")}>
-            <MaterialIcons name="tune" size={22} color={colors.text} />
           </TouchableOpacity>
         </View>
       </View>
@@ -91,9 +105,16 @@ export default function HikesScreen({ navigation }) {
             <View style={styles.cardBody}>
               <View style={styles.cardHeader}>
                 <Text style={styles.cardTitle}>{item.name}</Text>
-                <TouchableOpacity onPress={() => handleDelete(item)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-                  <MaterialIcons name="more-vert" size={18} color={colors.textMuted} />
-                </TouchableOpacity>
+                {item.userId === uid ? (
+                  <TouchableOpacity onPress={() => handleMenu(item)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                    <MaterialIcons name="more-vert" size={18} color={colors.textMuted} />
+                  </TouchableOpacity>
+                ) : (
+                  <View style={styles.sharedTag}>
+                    <MaterialIcons name="groups" size={12} color={colors.textMuted} />
+                    <Text style={styles.sharedTagText}>Shared</Text>
+                  </View>
+                )}
               </View>
               <Text style={typography.caption}>{item.location}</Text>
               <Text style={typography.caption}>{item.hikeDate?.toDateString()}</Text>
@@ -159,6 +180,17 @@ const styles = StyleSheet.create({
   cardBody: { flex: 1, justifyContent: "center" },
   cardHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
   cardTitle: { fontSize: 17, fontWeight: "700", color: colors.text },
+  sharedTag: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 3,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radius.pill,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+  },
+  sharedTagText: { fontSize: 10, fontWeight: "600", color: colors.textMuted },
   fab: {
     position: "absolute",
     right: spacing.lg,

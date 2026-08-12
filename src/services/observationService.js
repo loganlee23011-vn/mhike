@@ -4,9 +4,7 @@ import {
   deleteDoc,
   doc,
   getDocs,
-  limit,
   onSnapshot,
-  orderBy,
   query,
   Timestamp,
   updateDoc,
@@ -41,11 +39,17 @@ export function subscribeToObservations(hikeId, onChange, onError) {
   );
 }
 
-export function subscribeToRecentObservations(count, onChange, onError) {
-  const q = query(observationsRef, orderBy("observedAt", "desc"), limit(count));
+export function subscribeToRecentObservations(userId, count, onChange, onError) {
+  // Single-field where(), sorted+sliced client-side — same reasoning as
+  // subscribeToObservations: avoids requiring a composite userId+observedAt index.
+  const q = query(observationsRef, where("userId", "==", userId));
   return onSnapshot(
     q,
-    (snapshot) => onChange(snapshot.docs.map(toDoc)),
+    (snapshot) => {
+      const docs = snapshot.docs.map(toDoc);
+      docs.sort((a, b) => (b.observedAt?.getTime() ?? 0) - (a.observedAt?.getTime() ?? 0));
+      onChange(docs.slice(0, count));
+    },
     onError
   );
 }

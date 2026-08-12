@@ -72,7 +72,7 @@ export default function EntryRouteScreen({ navigation }) {
           ))}
         </View>
 
-        <Text style={styles.label}>Estimated Duration *</Text>
+        <Text style={styles.label}>Estimated Duration (optional)</Text>
         <TextInput
           style={styles.input}
           placeholder="3 - 5 hours"
@@ -81,7 +81,7 @@ export default function EntryRouteScreen({ navigation }) {
           onChangeText={(estimatedDuration) => setFields({ estimatedDuration })}
         />
 
-        <Text style={styles.label}>Terrain Type *</Text>
+        <Text style={styles.label}>Terrain Type (optional)</Text>
         <View style={styles.chipRow}>
           {TERRAINS.map((t) => (
             <TouchableOpacity

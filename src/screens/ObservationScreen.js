@@ -1,8 +1,10 @@
+import DateTimePicker from "@react-native-community/datetimepicker";
 import { MaterialIcons } from "@expo/vector-icons";
 import { useEffect, useState } from "react";
 import {
   Alert,
   FlatList,
+  Platform,
   StyleSheet,
   Text,
   TextInput,
@@ -14,6 +16,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import ScreenHeader from "../components/ScreenHeader";
 import { colors, radius, spacing, typography } from "../constants/theme";
 import { useFirebase } from "../context/FirebaseContext";
+import { getHikeById } from "../services/hikeService";
 import {
   addObservation,
   deleteObservation,
@@ -21,13 +24,35 @@ import {
   updateObservation,
 } from "../services/observationService";
 
+function toDateTimeInputText(date) {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, "0");
+  const d = String(date.getDate()).padStart(2, "0");
+  const hh = String(date.getHours()).padStart(2, "0");
+  const mm = String(date.getMinutes()).padStart(2, "0");
+  return `${y}-${m}-${d} ${hh}:${mm}`;
+}
+
+function formatDate(date) {
+  return date.toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" });
+}
+
+function formatTime(date) {
+  return date.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
+}
+
 export default function ObservationScreen({ route, navigation }) {
   const hikeId = route.params?.hikeId;
   const { uid } = useFirebase();
   const [observations, setObservations] = useState([]);
+  const [hike, setHike] = useState(null);
   const [adding, setAdding] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [text, setText] = useState("");
+  const [observedAt, setObservedAt] = useState(new Date());
+  const [pickerMode, setPickerMode] = useState(null);
+  const [comments, setComments] = useState("");
+  const [errors, setErrors] = useState({});
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
@@ -36,20 +61,82 @@ export default function ObservationScreen({ route, navigation }) {
     return unsubscribe;
   }, [hikeId]);
 
+  useEffect(() => {
+    if (!hikeId) return;
+    let active = true;
+    getHikeById(hikeId)
+      .then((result) => {
+        if (active) setHike(result);
+      })
+      .catch((err) => console.error(err));
+    return () => {
+      active = false;
+    };
+  }, [hikeId]);
+
+  const isHikeOwner = Boolean(hike && hike.userId === uid);
+
   const closeEditor = () => {
     setAdding(false);
     setEditingId(null);
     setText("");
+    setObservedAt(new Date());
+    setPickerMode(null);
+    setComments("");
+    setErrors({});
+  };
+
+  const openAdd = () => {
+    setObservedAt(new Date());
+    setAdding(true);
+  };
+
+  const handleDateChange = (event, selectedDate) => {
+    if (Platform.OS === "android") setPickerMode(null);
+    if (event.type === "set" && selectedDate) {
+      setObservedAt((prev) => {
+        const next = new Date(prev);
+        next.setFullYear(selectedDate.getFullYear(), selectedDate.getMonth(), selectedDate.getDate());
+        return next;
+      });
+    }
+  };
+
+  const handleTimeChange = (event, selectedTime) => {
+    if (Platform.OS === "android") setPickerMode(null);
+    if (event.type === "set" && selectedTime) {
+      setObservedAt((prev) => {
+        const next = new Date(prev);
+        next.setHours(selectedTime.getHours(), selectedTime.getMinutes(), 0, 0);
+        return next;
+      });
+    }
   };
 
   const handleSave = async () => {
-    if (!text.trim()) return;
+    const nextErrors = {};
+    if (!text.trim()) nextErrors.text = "Observation text is required.";
+    if (!observedAt) nextErrors.time = "Select a time.";
+
+    if (Object.keys(nextErrors).length > 0) {
+      setErrors(nextErrors);
+      return;
+    }
+
     setSaving(true);
     try {
       if (editingId) {
-        await updateObservation(editingId, { observationText: text.trim() });
+        await updateObservation(editingId, {
+          observationText: text.trim(),
+          observedAt,
+          comments: comments.trim(),
+        });
       } else {
-        await addObservation(uid, hikeId, { observationText: text.trim() });
+        await addObservation(uid, hikeId, {
+          observationText: text.trim(),
+          observedAt,
+          comments: comments.trim(),
+        });
       }
       closeEditor();
     } catch (err) {
@@ -62,6 +149,9 @@ export default function ObservationScreen({ route, navigation }) {
   const handleEdit = (item) => {
     setEditingId(item.id);
     setText(item.observationText);
+    setObservedAt(item.observedAt ?? new Date());
+    setComments(item.comments ?? "");
+    setErrors({});
     setAdding(true);
   };
 
@@ -77,11 +167,13 @@ export default function ObservationScreen({ route, navigation }) {
   };
 
   const handleMenu = (item) => {
-    Alert.alert(undefined, undefined, [
-      { text: "Edit", onPress: () => handleEdit(item) },
-      { text: "Delete", style: "destructive", onPress: () => handleDelete(item) },
-      { text: "Cancel", style: "cancel" },
-    ]);
+    // Anyone (author or hike owner) can delete, but only the author may
+    // rewrite someone else's observation text.
+    const options = [];
+    if (item.userId === uid) options.push({ text: "Edit", onPress: () => handleEdit(item) });
+    options.push({ text: "Delete", style: "destructive", onPress: () => handleDelete(item) });
+    options.push({ text: "Cancel", style: "cancel" });
+    Alert.alert(undefined, undefined, options);
   };
 
   return (
@@ -101,10 +193,14 @@ export default function ObservationScreen({ route, navigation }) {
           renderItem={({ item }) => (
             <View style={styles.card}>
               <View style={styles.cardHeader}>
-                <Text style={typography.caption}>{item.observedAt?.toDateString()}</Text>
-                <TouchableOpacity onPress={() => handleMenu(item)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-                  <MaterialIcons name="more-vert" size={16} color={colors.textMuted} />
-                </TouchableOpacity>
+                <Text style={typography.caption}>
+                  {item.observedAt ? toDateTimeInputText(item.observedAt) : ""}
+                </Text>
+                {item.userId === uid || isHikeOwner ? (
+                  <TouchableOpacity onPress={() => handleMenu(item)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                    <MaterialIcons name="more-vert" size={16} color={colors.textMuted} />
+                  </TouchableOpacity>
+                ) : null}
               </View>
               <Text style={typography.body}>{item.observationText}</Text>
               {item.comments ? <Text style={typography.caption}>{item.comments}</Text> : null}
@@ -114,7 +210,8 @@ export default function ObservationScreen({ route, navigation }) {
       )}
 
       {adding ? (
-        <View style={styles.addRow}>
+        <View style={styles.editor}>
+          <Text style={styles.label}>Observation *</Text>
           <TextInput
             style={styles.input}
             placeholder="What did you observe?"
@@ -123,16 +220,62 @@ export default function ObservationScreen({ route, navigation }) {
             onChangeText={setText}
             autoFocus
           />
-          <TouchableOpacity style={styles.saveBtn} onPress={handleSave} disabled={saving}>
-            <MaterialIcons name="check" size={20} color={colors.surface} />
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.cancelBtn} onPress={closeEditor}>
-            <MaterialIcons name="close" size={20} color={colors.text} />
-          </TouchableOpacity>
+          {errors.text ? <Text style={styles.error}>{errors.text}</Text> : null}
+
+          <Text style={styles.label}>Date & Time *</Text>
+          <View style={styles.dateTimeRow}>
+            <TouchableOpacity
+              style={[styles.input, styles.dateTimeBtn]}
+              onPress={() => setPickerMode("date")}
+            >
+              <Text style={styles.dateText}>{formatDate(observedAt)}</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.input, styles.dateTimeBtn]}
+              onPress={() => setPickerMode("time")}
+            >
+              <Text style={styles.dateText}>{formatTime(observedAt)}</Text>
+            </TouchableOpacity>
+          </View>
+          {errors.time ? <Text style={styles.error}>{errors.time}</Text> : null}
+          {pickerMode ? (
+            <View style={Platform.OS === "ios" ? styles.iosPickerWrap : undefined}>
+              <DateTimePicker
+                value={observedAt}
+                mode={pickerMode}
+                display={Platform.OS === "ios" ? "spinner" : "default"}
+                onChange={pickerMode === "date" ? handleDateChange : handleTimeChange}
+              />
+              {Platform.OS === "ios" ? (
+                <TouchableOpacity style={styles.doneBtn} onPress={() => setPickerMode(null)}>
+                  <Text style={styles.doneText}>Done</Text>
+                </TouchableOpacity>
+              ) : null}
+            </View>
+          ) : null}
+
+          <Text style={styles.label}>Comments (optional)</Text>
+          <TextInput
+            style={[styles.input, styles.multiline]}
+            placeholder="Anything else worth noting..."
+            placeholderTextColor={colors.textMuted}
+            value={comments}
+            onChangeText={setComments}
+            multiline
+          />
+
+          <View style={styles.editorActions}>
+            <TouchableOpacity style={styles.cancelBtn} onPress={closeEditor}>
+              <Text style={styles.cancelText}>Cancel</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.saveBtn} onPress={handleSave} disabled={saving}>
+              <Text style={styles.saveText}>Save</Text>
+            </TouchableOpacity>
+          </View>
         </View>
       ) : (
         hikeId ? (
-          <TouchableOpacity style={styles.fab} onPress={() => setAdding(true)}>
+          <TouchableOpacity style={styles.fab} onPress={openAdd}>
             <MaterialIcons name="add" size={28} color={colors.surface} />
           </TouchableOpacity>
         ) : null
@@ -166,14 +309,15 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     elevation: 4,
   },
-  addRow: {
-    flexDirection: "row",
-    gap: spacing.sm,
+  editor: {
     padding: spacing.md,
-    alignItems: "center",
+    gap: spacing.xs,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+    backgroundColor: colors.surface,
   },
+  label: { fontSize: 13, fontWeight: "600", color: colors.text, marginTop: spacing.sm },
   input: {
-    flex: 1,
     borderWidth: 1,
     borderColor: colors.border,
     borderRadius: radius.md,
@@ -182,21 +326,43 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surface,
     color: colors.text,
   },
+  multiline: { minHeight: 60, textAlignVertical: "top" },
+  error: { color: colors.danger, fontSize: 12, marginTop: 4 },
+  dateTimeRow: { flexDirection: "row", gap: spacing.sm },
+  dateTimeBtn: { flex: 1 },
+  dateText: { color: colors.text },
+  iosPickerWrap: {
+    backgroundColor: colors.surface,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+    marginTop: spacing.xs,
+  },
+  doneBtn: { alignItems: "center", paddingVertical: spacing.sm, borderTopWidth: 1, borderTopColor: colors.border },
+  doneText: { color: colors.primary, fontWeight: "700" },
+  editorActions: {
+    flexDirection: "row",
+    justifyContent: "flex-end",
+    gap: spacing.sm,
+    marginTop: spacing.sm,
+  },
   saveBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.sm,
+    borderRadius: radius.md,
     backgroundColor: colors.primary,
     alignItems: "center",
     justifyContent: "center",
   },
+  saveText: { color: colors.surface, fontWeight: "700" },
   cancelBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.sm,
+    borderRadius: radius.md,
     borderWidth: 1,
     borderColor: colors.border,
     alignItems: "center",
     justifyContent: "center",
   },
+  cancelText: { color: colors.text, fontWeight: "600" },
 });

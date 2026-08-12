@@ -57,6 +57,7 @@ export async function addHike(userId, hike) {
     latitude: hike.latitude ?? null,
     longitude: hike.longitude ?? null,
     weather: hike.weather ?? null,
+    completed: false,
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
   });
@@ -67,6 +68,16 @@ export async function updateHike(id, changes) {
   await updateDoc(doc(db, "hikes", id), {
     ...changes,
     ...(changes.hikeDate ? { hikeDate: Timestamp.fromDate(changes.hikeDate) } : {}),
+    updatedAt: serverTimestamp(),
+  });
+}
+
+// Manually toggled from DetailScreen — completion is independent of hikeDate
+// (a past hike the user never did shouldn't silently read as "Completed",
+// and one finished ahead of schedule should be markable right away).
+export async function setHikeCompleted(id, completed) {
+  await updateDoc(doc(db, "hikes", id), {
+    completed,
     updatedAt: serverTimestamp(),
   });
 }

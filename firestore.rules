@@ -16,10 +16,18 @@ service cloud.firestore {
       allow update, delete: if isOwner(resource);
     }
 
+    function isHikeOwnerOf(resource) {
+      return isSignedIn() &&
+        get(/databases/$(database)/documents/hikes/$(resource.data.hikeId)).data.userId == request.auth.uid;
+    }
+
     match /observations/{observationId} {
       allow read: if isSignedIn();
       allow create: if isSignedIn() && request.auth.uid == request.resource.data.userId;
-      allow update, delete: if isOwner(resource);
+      // Only the author may edit the text; the author or the hike's owner
+      // (moderating their own hike) may delete it.
+      allow update: if isOwner(resource);
+      allow delete: if isOwner(resource) || isHikeOwnerOf(resource);
     }
   }
 }

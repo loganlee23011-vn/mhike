@@ -5,13 +5,16 @@ import { SafeAreaView } from "react-native-safe-area-context";
 
 import { colors, radius, spacing, typography } from "../constants/theme";
 import { getTerrainImage } from "../constants/terrainImages";
+import { useFirebase } from "../context/FirebaseContext";
 import { useHikeForm } from "../context/HikeFormContext";
-import { deleteHike, getHikeById } from "../services/hikeService";
+import { deleteHike, getHikeById, setHikeCompleted } from "../services/hikeService";
 
 export default function DetailScreen({ route, navigation }) {
   const hikeId = route.params?.hikeId;
+  const { uid } = useFirebase();
   const [hike, setHike] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [togglingComplete, setTogglingComplete] = useState(false);
   const { startEdit } = useHikeForm();
 
   useEffect(() => {
@@ -46,9 +49,24 @@ export default function DetailScreen({ route, navigation }) {
     );
   }
 
+  const isOwner = hike.userId === uid;
+
   const handleEdit = () => {
     startEdit(hike);
     navigation.navigate("EntryBasic");
+  };
+
+  const handleToggleCompleted = async () => {
+    const next = !hike.completed;
+    setTogglingComplete(true);
+    try {
+      await setHikeCompleted(hikeId, next);
+      setHike((prev) => ({ ...prev, completed: next }));
+    } catch (err) {
+      Alert.alert("Couldn't update hike", err.message);
+    } finally {
+      setTogglingComplete(false);
+    }
   };
 
   const handleDelete = () => {
@@ -86,13 +104,19 @@ export default function DetailScreen({ route, navigation }) {
           <TouchableOpacity onPress={() => navigation.goBack()} style={styles.heroIcon}>
             <MaterialIcons name="arrow-back" size={22} color={colors.surface} />
           </TouchableOpacity>
-          <View style={styles.heroActions}>
-            <TouchableOpacity onPress={handleEdit} style={styles.heroActionBtn}>
-              <MaterialIcons name="edit" size={20} color={colors.surface} />
-            </TouchableOpacity>
-            <TouchableOpacity onPress={handleDelete} style={styles.heroActionBtn}>
-              <MaterialIcons name="delete-outline" size={20} color={colors.surface} />
-            </TouchableOpacity>
+          {isOwner ? (
+            <View style={styles.heroActions}>
+              <TouchableOpacity onPress={handleEdit} style={styles.heroActionBtn}>
+                <MaterialIcons name="edit" size={20} color={colors.surface} />
+              </TouchableOpacity>
+              <TouchableOpacity onPress={handleDelete} style={styles.heroActionBtn}>
+                <MaterialIcons name="delete-outline" size={20} color={colors.surface} />
+              </TouchableOpacity>
+            </View>
+          ) : null}
+          <View style={styles.ownerBadge}>
+            <MaterialIcons name={isOwner ? "person" : "groups"} size={12} color={colors.surface} />
+            <Text style={styles.ownerBadgeText}>{isOwner ? "Your hike" : "Shared by another hiker"}</Text>
           </View>
           <Text style={styles.heroTitle}>{hike.name}</Text>
           <Text style={styles.heroSubtitle}>
@@ -105,7 +129,7 @@ export default function DetailScreen({ route, navigation }) {
         <View style={styles.actionsRow}>
           <TouchableOpacity
             style={styles.actionCard}
-            onPress={() => navigation.navigate("MainTabs", { screen: "Map" })}
+            onPress={() => navigation.navigate("MainTabs", { screen: "Map", params: { hikeId } })}
           >
             <MaterialIcons name="map" size={20} color={colors.primary} />
             <Text style={styles.actionLabel}>Map</Text>
@@ -118,6 +142,28 @@ export default function DetailScreen({ route, navigation }) {
             <Text style={styles.actionLabel}>Observations</Text>
           </TouchableOpacity>
         </View>
+
+        {isOwner ? (
+          <TouchableOpacity
+            style={[styles.completeBtn, hike.completed && styles.completeBtnDone]}
+            onPress={handleToggleCompleted}
+            disabled={togglingComplete}
+          >
+            <MaterialIcons
+              name={hike.completed ? "check-circle" : "radio-button-unchecked"}
+              size={20}
+              color={hike.completed ? colors.surface : colors.primary}
+            />
+            <Text style={[styles.completeText, hike.completed && styles.completeTextDone]}>
+              {hike.completed ? "Completed" : "Mark as Completed"}
+            </Text>
+          </TouchableOpacity>
+        ) : hike.completed ? (
+          <View style={[styles.completeBtn, styles.completeBtnDone]}>
+            <MaterialIcons name="check-circle" size={20} color={colors.surface} />
+            <Text style={[styles.completeText, styles.completeTextDone]}>Completed</Text>
+          </View>
+        ) : null}
 
         <Text style={typography.h2}>Overview</Text>
         <View style={styles.card}>
@@ -173,6 +219,18 @@ const styles = StyleSheet.create({
   heroIcon: { position: "absolute", top: spacing.md, left: spacing.md },
   heroActions: { position: "absolute", top: spacing.md, right: spacing.md, flexDirection: "row", gap: spacing.md },
   heroActionBtn: {},
+  ownerBadge: {
+    alignSelf: "flex-start",
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    backgroundColor: "rgba(0,0,0,0.4)",
+    borderRadius: radius.pill,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 3,
+    marginBottom: spacing.xs,
+  },
+  ownerBadgeText: { color: colors.surface, fontSize: 11, fontWeight: "600" },
   heroTitle: { color: colors.surface, fontSize: 24, fontWeight: "700" },
   heroSubtitle: { color: colors.surface, opacity: 0.9 },
   content: { padding: spacing.md, gap: spacing.sm },
@@ -188,6 +246,20 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   actionLabel: { fontSize: 11, color: colors.text, fontWeight: "600" },
+  completeBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: spacing.xs,
+    borderWidth: 1,
+    borderColor: colors.primary,
+    borderRadius: radius.md,
+    paddingVertical: spacing.sm,
+    marginBottom: spacing.md,
+  },
+  completeBtnDone: { backgroundColor: colors.primary },
+  completeText: { color: colors.primary, fontWeight: "700" },
+  completeTextDone: { color: colors.surface },
   sectionTitle: { marginTop: spacing.md },
   card: {
     backgroundColor: colors.surface,

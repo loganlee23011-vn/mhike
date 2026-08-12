@@ -8,7 +8,7 @@ import { useFirebase } from "../context/FirebaseContext";
 import { signOutUser } from "../services/authService";
 import { resetHikes } from "../services/hikeService";
 
-export default function MoreScreen({ navigation }) {
+export default function MoreScreen() {
   const { uid } = useFirebase();
   const [resetting, setResetting] = useState(false);
 
@@ -47,10 +47,16 @@ export default function MoreScreen({ navigation }) {
     );
   };
 
+  const handleAbout = () => {
+    Alert.alert(
+      "About M-Hike",
+      "M-Hike v1.0.0\n\nRecord planned hikes, log observations, and share them with the community. Built with React Native and Firebase for COMP1786 Mobile Application Design and Development, University of Greenwich."
+    );
+  };
+
   const rows = [
-    { key: "search", label: "Search hikes", icon: "search", onPress: () => navigation.navigate("Search") },
     { key: "reset", label: "Reset database", icon: "delete-outline", onPress: handleReset },
-    { key: "about", label: "About M-Hike", icon: "info-outline", onPress: () => {} },
+    { key: "about", label: "About M-Hike", icon: "info-outline", onPress: handleAbout },
     { key: "logout", label: "Log out", icon: "logout", onPress: handleLogout },
   ];
 

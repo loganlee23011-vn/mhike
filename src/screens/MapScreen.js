@@ -8,7 +8,7 @@ import { subscribeToHikes } from "../services/hikeService";
 
 const DEFAULT_CENTER = { latitude: 54.5, longitude: -3.5, zoom: 5 };
 
-function buildMapHtml(pins, center) {
+function buildMapHtml(pins, center, focusHikeId) {
   return `<!DOCTYPE html>
 <html>
 <head>
@@ -29,16 +29,27 @@ function buildMapHtml(pins, center) {
     }).addTo(map);
 
     const pins = ${JSON.stringify(pins)};
+    const focusHikeId = ${JSON.stringify(focusHikeId ?? null)};
     const bounds = [];
+    let focusMarker = null;
     pins.forEach((pin) => {
       const marker = L.marker([pin.latitude, pin.longitude]).addTo(map);
       marker.bindPopup('<b>' + pin.name + '</b><br/>' + pin.location);
       marker.on('click', () => {
         window.ReactNativeWebView.postMessage(JSON.stringify({ hikeId: pin.id }));
       });
+      if (focusHikeId && pin.id === focusHikeId) {
+        focusMarker = marker;
+      }
       bounds.push([pin.latitude, pin.longitude]);
     });
-    if (bounds.length > 0) {
+    if (focusMarker) {
+      // A single hike was opened from its Detail screen — zoom to that pin
+      // instead of fitting every hike on the map, otherwise "Map" from a
+      // hike detail looks identical to the general Map tab.
+      map.setView(focusMarker.getLatLng(), 14);
+      focusMarker.openPopup();
+    } else if (bounds.length > 0) {
       map.fitBounds(bounds, { padding: [40, 40], maxZoom: 12 });
     }
   </script>
@@ -46,7 +57,8 @@ function buildMapHtml(pins, center) {
 </html>`;
 }
 
-export default function MapScreen({ navigation }) {
+export default function MapScreen({ navigation, route }) {
+  const focusHikeId = route?.params?.hikeId ?? null;
   const [hikes, setHikes] = useState([]);
 
   useEffect(() => {
@@ -62,11 +74,15 @@ export default function MapScreen({ navigation }) {
     [hikes]
   );
 
-  const center = pins.length > 0
+  const focusPin = focusHikeId ? pins.find((p) => p.id === focusHikeId) : null;
+
+  const center = focusPin
+    ? { latitude: focusPin.latitude, longitude: focusPin.longitude, zoom: 14 }
+    : pins.length > 0
     ? { latitude: pins[0].latitude, longitude: pins[0].longitude, zoom: 10 }
     : DEFAULT_CENTER;
 
-  const html = useMemo(() => buildMapHtml(pins, center), [pins, center]);
+  const html = useMemo(() => buildMapHtml(pins, center, focusHikeId), [pins, center, focusHikeId]);
 
   const handleMessage = (event) => {
     try {
@@ -80,7 +96,11 @@ export default function MapScreen({ navigation }) {
   return (
     <SafeAreaView style={styles.safe} edges={["top"]}>
       <Text style={[typography.h1, styles.title]}>Map</Text>
-      {pins.length === 0 ? (
+      {focusHikeId && !focusPin ? (
+        <View style={styles.placeholder}>
+          <Text style={typography.caption}>This hike has no saved location.</Text>
+        </View>
+      ) : pins.length === 0 ? (
         <View style={styles.placeholder}>
           <Text style={typography.caption}>
             No hikes have a saved location yet. Use "Use current location" when adding a hike to see it here.

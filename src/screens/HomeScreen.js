@@ -5,15 +5,17 @@ import { SafeAreaView } from "react-native-safe-area-context";
 
 import { colors, radius, spacing, typography } from "../constants/theme";
 import { getTerrainImage } from "../constants/terrainImages";
+import { useFirebase } from "../context/FirebaseContext";
 import { useHikeForm } from "../context/HikeFormContext";
 import { subscribeToRecentObservations } from "../services/observationService";
 import { subscribeToHikes } from "../services/hikeService";
 
 const quickActions = [
   { key: "map", label: "Map", icon: "location-on", tab: "Map" },
-  { key: "observations", label: "Observations", icon: "visibility", screen: "Observations" },
-  { key: "myHikes", label: "My Hikes", icon: "backpack", tab: "Hikes" },
-  { key: "planRoute", label: "Plan Route", icon: "navigation", screen: "EntryBasic" },
+  // "Hikes" tab lists every hiker's hikes (community sharing), not just this
+  // user's — labelled "All Hikes" here so it isn't confused with the
+  // personal stats/upcoming-hike cards on this screen.
+  { key: "allHikes", label: "All Hikes", icon: "backpack", tab: "Hikes" },
 ];
 
 function greeting() {
@@ -32,26 +34,40 @@ function daysUntilLabel(date) {
 }
 
 export default function HomeScreen({ navigation }) {
+  const { uid } = useFirebase();
   const [hikes, setHikes] = useState([]);
   const [observations, setObservations] = useState([]);
   const { resetForm } = useHikeForm();
 
   useEffect(() => {
     const unsubscribeHikes = subscribeToHikes(setHikes, (err) => console.error(err));
-    const unsubscribeObs = subscribeToRecentObservations(3, setObservations, (err) => console.error(err));
-    return () => {
-      unsubscribeHikes();
-      unsubscribeObs();
-    };
+    return unsubscribeHikes;
   }, []);
 
+  useEffect(() => {
+    if (!uid) return undefined;
+    const unsubscribeObs = subscribeToRecentObservations(uid, 3, setObservations, (err) => console.error(err));
+    return unsubscribeObs;
+  }, [uid]);
+
+  // This dashboard is the personal "your next adventure" view, so stats and
+  // the upcoming-hike cards are scoped to hikes this user owns. The full
+  // community list (everyone's hikes) lives on the "All Hikes" screen.
+  const myHikes = useMemo(() => hikes.filter((h) => h.userId === uid), [hikes, uid]);
+
   const now = new Date();
-  const upcoming = useMemo(() => hikes.filter((h) => h.hikeDate && h.hikeDate >= now), [hikes]);
-  const completedCount = hikes.length - upcoming.length;
-  const totalDistance = useMemo(
-    () => hikes.reduce((sum, h) => sum + (Number(h.length) || 0), 0),
-    [hikes]
+  const upcoming = useMemo(
+    () => myHikes.filter((h) => h.hikeDate && h.hikeDate >= now && !h.completed),
+    [myHikes]
   );
+  const completedCount = useMemo(() => myHikes.filter((h) => h.completed).length, [myHikes]);
+  const totalDistance = useMemo(
+    () => myHikes.reduce((sum, h) => sum + (Number(h.length) || 0), 0),
+    [myHikes]
+  );
+  // Observations (own) can reference a hike owned by someone else (e.g. a
+  // community hike this user contributed a note to), so the name lookup
+  // stays keyed off the full hikes list, not myHikes.
   const hikesById = useMemo(() => Object.fromEntries(hikes.map((h) => [h.id, h])), [hikes]);
 
   const upcomingHike = upcoming[0];
@@ -70,8 +86,8 @@ export default function HomeScreen({ navigation }) {
 
         <View style={styles.statsRow}>
           <View style={styles.statTile}>
-            <Text style={styles.statValue}>{hikes.length}</Text>
-            <Text style={styles.statLabel}>Hikes</Text>
+            <Text style={styles.statValue}>{myHikes.length}</Text>
+            <Text style={styles.statLabel}>Your hikes</Text>
           </View>
           <View style={styles.statTile}>
             <Text style={styles.statValue}>{totalDistance.toFixed(1)}</Text>
@@ -84,9 +100,9 @@ export default function HomeScreen({ navigation }) {
         </View>
 
         <View style={styles.sectionRow}>
-          <Text style={typography.h2}>Upcoming Hike</Text>
+          <Text style={typography.h2}>Your Upcoming Hike</Text>
           <TouchableOpacity onPress={() => navigation.navigate("Hikes")}>
-            <Text style={styles.link}>View all</Text>
+            <Text style={styles.link}>See everyone's hikes</Text>
           </TouchableOpacity>
         </View>
 
@@ -151,12 +167,7 @@ export default function HomeScreen({ navigation }) {
             <TouchableOpacity
               key={action.key}
               style={styles.actionCard}
-              onPress={() => {
-                if (action.screen === "EntryBasic") resetForm();
-                action.tab
-                  ? navigation.navigate(action.tab)
-                  : navigation.navigate(action.screen);
-              }}
+              onPress={() => navigation.navigate(action.tab)}
             >
               <MaterialIcons name={action.icon} size={22} color={colors.primary} />
               <Text style={styles.actionLabel}>{action.label}</Text>
@@ -166,7 +177,7 @@ export default function HomeScreen({ navigation }) {
 
         <View style={styles.sectionRow}>
           <Text style={typography.h2}>Recent Observations</Text>
-          <TouchableOpacity onPress={() => navigation.navigate("Observations")}>
+          <TouchableOpacity onPress={() => navigation.navigate("Hikes")}>
             <Text style={styles.link}>View all</Text>
           </TouchableOpacity>
         </View>
