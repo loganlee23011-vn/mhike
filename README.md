@@ -1,62 +1,62 @@
 # M-Hike (MHikeRN)
 
-M-Hike là ứng dụng di động ghi lại và quản lý các chuyến đi bộ đường dài (hiking), xây dựng bằng **React Native + Expo**, dùng **Firebase** làm backend (Authentication + Firestore).
+M-Hike is a mobile app for logging and managing hiking trips, built with **React Native + Expo**, using **Firebase** as the backend (Authentication + Firestore).
 
-## Tính năng chính
+## Key Features
 
-- **Đăng nhập / Đăng ký** với Firebase Authentication, hỗ trợ "remember me".
-- **Quản lý chuyến hike**: tạo mới theo từng bước (thông tin cơ bản → vị trí → lộ trình → xác nhận), xem danh sách, xem chi tiết, chỉnh sửa.
-- **Ghi nhận vị trí**: dùng vị trí thiết bị để lưu nơi diễn ra chuyến hike, hiển thị trên bản đồ (`MapScreen`).
-- **Thời tiết**: lấy thông tin thời tiết tại vị trí hike (`weatherService`).
-- **Quan sát (Observations)**: thêm ghi chú/quan sát chi tiết cho từng chuyến hike, kèm kiểm duyệt cộng đồng.
-- **Tìm kiếm** chuyến hike theo tiêu chí (`SearchScreen`).
+- **Login / Register** with Firebase Authentication, including "remember me" support.
+- **Hike management**: create a new hike through a multi-step flow (basic info → location → route → confirm), view the hike list, view details, and edit.
+- **Location tracking**: uses the device's location to record where a hike takes place and displays it on a map (`MapScreen`).
+- **Weather**: fetches weather information for the hike's location (`weatherService`).
+- **Observations**: add detailed notes/observations to each hike, with community moderation.
+- **Search**: search hikes by criteria (`SearchScreen`).
 
-## Công nghệ sử dụng
+## Tech Stack
 
 - [Expo](https://expo.dev/) (SDK 54) + React Native 0.81
 - React Navigation (bottom tabs + native stack)
 - Firebase (`firebase` JS SDK) — Authentication & Firestore
 - `expo-location`, `expo-secure-store`, `@react-native-async-storage/async-storage`
 
-## Cấu trúc thư mục
+## Project Structure
 
 ```
 src/
-├── components/      # Component dùng chung (header, step indicator...)
-├── constants/        # Theme, ảnh địa hình...
+├── components/      # Shared components (header, step indicator...)
+├── constants/        # Theme, terrain images...
 ├── context/           # FirebaseContext, HikeFormContext
 ├── navigation/        # Auth/Main/Root navigator
-├── screens/            # Các màn hình (Login, Hikes, Detail, Map, Search...)
+├── screens/            # Screens (Login, Hikes, Detail, Map, Search...)
 └── services/           # authService, hikeService, observationService, weatherService...
 ```
 
-## Bắt đầu
+## Getting Started
 
-### Yêu cầu
+### Prerequisites
 
 - Node.js
 - Expo CLI (`npx expo`)
-- Tài khoản Firebase với project đã bật Authentication và Firestore
+- A Firebase project with Authentication and Firestore enabled
 
-### Cài đặt
+### Install
 
 ```bash
 npm install
 ```
 
-### Cấu hình Firebase
+### Configure Firebase
 
-Cập nhật thông tin project Firebase trong `src/services/firebaseConfig.js` và các rule bảo mật trong `firestore.rules`.
+Update your Firebase project settings in `src/services/firebaseConfig.js` and the security rules in `firestore.rules`.
 
-### Chạy ứng dụng
+### Run
 
 ```bash
-npm start        # mở Expo Dev Tools
-npm run android  # chạy trên Android
-npm run ios      # chạy trên iOS
-npm run web      # chạy trên web
+npm start        # open Expo Dev Tools
+npm run android  # run on Android
+npm run ios      # run on iOS
+npm run web      # run on web
 ```
 
-## Giấy phép
+## License
 
-Xem file [LICENSE](./LICENSE).
+See the [LICENSE](./LICENSE) file.
